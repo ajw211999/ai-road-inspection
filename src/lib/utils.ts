@@ -21,3 +21,15 @@ export function pciLabel(score: number): string {
   if (score >= 40) return "Poor";
   return "Failed";
 }
+
+/** Convert feet to miles with 1 decimal */
+export function formatMiles(ft: number): string {
+  return (ft / 5280).toFixed(1);
+}
+
+/** Human-readable distress type label */
+export function distressLabel(type: string): string {
+  return type
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}

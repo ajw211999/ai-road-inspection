@@ -210,3 +210,40 @@ export const mockDashboardStats: DashboardStats = {
   recentSurveys: [mockSurvey],
   pciDistribution: buildPciDistribution(),
 };
+
+// ---------- Additional Mock Data for Phase 2B ----------
+
+export const mockOrganization = {
+  id: mockSurvey.organizationId,
+  name: "City of Austin — Public Works",
+  slug: "city-of-austin",
+  logoUrl: null,
+  plan: "professional" as const,
+  stripeCustomerId: null,
+  stripeSubscriptionId: null,
+  createdAt: new Date("2025-06-01T00:00:00Z"),
+  updatedAt: new Date("2025-06-01T00:00:00Z"),
+};
+
+export const mockTotalMilesSurveyed = mockSegments.reduce(
+  (sum, s) => sum + s.lengthFt,
+  0
+);
+
+export const mockConditionBreakdown = {
+  good: mockSegments.filter((s) => s.pciScore >= 85).length,
+  satisfactory: mockSegments.filter(
+    (s) => s.pciScore >= 70 && s.pciScore < 85
+  ).length,
+  fair: mockSegments.filter(
+    (s) => s.pciScore >= 55 && s.pciScore < 70
+  ).length,
+  poor: mockSegments.filter(
+    (s) => s.pciScore >= 40 && s.pciScore < 55
+  ).length,
+  failed: mockSegments.filter((s) => s.pciScore < 40).length,
+};
+
+export const mockAdaAlertsCount = mockSegments.filter(
+  (s) => s.adaCurbRampFlag
+).length;
