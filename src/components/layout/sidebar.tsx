@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { UserButton } from "@clerk/nextjs";
 import {
   LayoutDashboard,
   Map,
@@ -55,8 +56,9 @@ export function Sidebar() {
       </nav>
 
       {/* Footer */}
-      <div className="border-t border-gray-200 p-4">
-        <p className="text-xs text-gray-400">AI Road Inspection v0.1</p>
+      <div className="flex items-center gap-3 border-t border-gray-200 p-4">
+        <UserButton />
+        <p className="text-xs text-gray-400">v0.1</p>
       </div>
     </aside>
   );
