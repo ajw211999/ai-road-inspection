@@ -9,6 +9,8 @@ interface EmptyStateProps {
     label: string;
     href: string;
   };
+  actionLabel?: string;
+  onAction?: () => void;
   className?: string;
 }
 
@@ -17,6 +19,8 @@ export function EmptyState({
   title,
   description,
   action,
+  actionLabel,
+  onAction,
   className,
 }: EmptyStateProps) {
   return (
@@ -33,6 +37,14 @@ export function EmptyState({
         >
           {action.label}
         </a>
+      )}
+      {actionLabel && onAction && (
+        <button
+          onClick={onAction}
+          className="mt-4 rounded-lg bg-[var(--color-primary)] px-4 py-2 text-sm font-medium text-white hover:opacity-90"
+        >
+          {actionLabel}
+        </button>
       )}
     </div>
   );

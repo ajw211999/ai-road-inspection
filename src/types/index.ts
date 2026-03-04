@@ -105,9 +105,9 @@ export interface RoadSegment {
 export interface Frame {
   id: string;
   surveyId: string;
-  segmentId: string;
+  segmentId: string | null;
   frameIndex: number;
-  imageUrl: string; // Cloudflare R2
+  imageUrl: string;
   lat: number;
   lng: number;
   heading: number | null;

@@ -187,8 +187,7 @@ export const frames = pgTable(
       .references(() => surveys.id)
       .notNull(),
     segmentId: uuid("segment_id")
-      .references(() => roadSegments.id)
-      .notNull(),
+      .references(() => roadSegments.id),
     frameIndex: integer("frame_index").notNull(),
     imageUrl: text("image_url").notNull(),
     lat: real("lat").notNull(),
@@ -197,7 +196,7 @@ export const frames = pgTable(
     distressType: distressTypeEnum("distress_type").default("none").notNull(),
     severity: severityEnum("severity").default("low").notNull(),
     confidence: real("confidence").default(0).notNull(),
-    pciScore: integer("pci_score").notNull(),
+    pciScore: integer("pci_score").default(0).notNull(),
     aiRawResponse: jsonb("ai_raw_response").default({}).notNull(), // audit trail
     humanOverride: boolean("human_override").default(false).notNull(),
     humanPciScore: integer("human_pci_score"),
