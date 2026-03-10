@@ -1,7 +1,7 @@
 import { inngest } from "@/lib/inngest";
 import { db } from "@/server/db";
 import { surveys, frames, roadSegments } from "@/server/db/schema";
-import { eq, sql, inArray } from "drizzle-orm";
+import { eq, sql, inArray, and, notInArray } from "drizzle-orm";
 
 const FRAMES_PER_SEGMENT = 5; // Group every 5 consecutive frames into a segment
 
@@ -33,7 +33,8 @@ export const generateSegments = inngest.createFunction(
 
     if (!survey) throw new Error(`Survey ${surveyId} not found`);
 
-    // Step 2: Fetch all analyzed frames ordered by index
+    // Step 2: Fetch analyzed frames — only public road scenes (exclude parking lots, driveways, etc.)
+    const NON_ROAD_SCENES = ["parking_lot", "driveway", "off_road", "not_road"] as const;
     const analyzedFrames = await step.run("fetch-analyzed-frames", async () => {
       return db
         .select({
@@ -47,7 +48,12 @@ export const generateSegments = inngest.createFunction(
           confidence: frames.confidence,
         })
         .from(frames)
-        .where(eq(frames.surveyId, surveyId))
+        .where(
+          and(
+            eq(frames.surveyId, surveyId),
+            notInArray(frames.sceneType, [...NON_ROAD_SCENES])
+          )
+        )
         .orderBy(frames.frameIndex);
     });
 

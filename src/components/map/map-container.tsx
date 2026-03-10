@@ -25,12 +25,13 @@ interface MapContainerProps {
 }
 
 export function MapContainer({
-  segments,
+  segments: initialSegments,
   frames,
   initialSegmentId,
   mapboxToken,
 }: MapContainerProps) {
   const mapRef = useRef<MapRef>(null);
+  const [segments, setSegments] = useState(initialSegments);
   const [selectedSegment, setSelectedSegment] = useState<RoadSegment | null>(
     () => {
       if (initialSegmentId) {
@@ -42,6 +43,11 @@ export function MapContainer({
   const [activeCategories, setActiveCategories] = useState<Set<string>>(
     () => new Set(PCI_CATEGORIES.map((c) => c.key))
   );
+
+  // Sync segments when parent re-fetches (survey change)
+  useEffect(() => {
+    setSegments(initialSegments);
+  }, [initialSegments]);
 
   const initialView = useMemo(
     () => computeViewState(segments),
@@ -117,6 +123,15 @@ export function MapContainer({
     setSelectedSegment(null);
   }, []);
 
+  const handleSegmentUpdated = useCallback((updated: RoadSegment) => {
+    setSegments((prev) =>
+      prev.map((s) => (s.id === updated.id ? updated : s))
+    );
+    setSelectedSegment((prev) =>
+      prev?.id === updated.id ? updated : prev
+    );
+  }, []);
+
   // No-token fallback
   if (!mapboxToken) {
     return (
@@ -145,6 +160,7 @@ export function MapContainer({
               segment={selectedSegment}
               frames={frames}
               onBack={handleBack}
+              onSegmentUpdated={handleSegmentUpdated}
             />
           ) : (
             <SegmentListPanel

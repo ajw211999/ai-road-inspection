@@ -1,13 +1,16 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getOrCreateCurrentUser } from "@/lib/auth";
 import { db } from "@/server/db";
-import { surveys, roadSegments } from "@/server/db/schema";
-import { eq, sql } from "drizzle-orm";
+import { surveys, roadSegments, frames, users } from "@/server/db/schema";
+import { eq, sql, and, desc } from "drizzle-orm";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const user = await getOrCreateCurrentUser();
     const orgId = user.organizationId;
+
+    const url = new URL(request.url);
+    const surveyId = url.searchParams.get("surveyId"); // optional filter
 
     // Get org info
     const org = await db.query.organizations.findFirst({
@@ -16,6 +19,27 @@ export async function GET() {
         orgId
       ),
     });
+
+    // Surveys list (for the filter dropdown)
+    const surveyList = await db
+      .select({
+        id: surveys.id,
+        name: surveys.name,
+        status: surveys.status,
+        completedAt: surveys.completedAt,
+        averagePci: surveys.averagePci,
+      })
+      .from(surveys)
+      .where(eq(surveys.organizationId, orgId))
+      .orderBy(desc(surveys.createdAt));
+
+    // Build segment filter condition
+    const segmentCondition = surveyId
+      ? and(eq(roadSegments.organizationId, orgId), eq(roadSegments.surveyId, surveyId))
+      : eq(roadSegments.organizationId, orgId);
+
+    // Effective PCI: use human override when present, otherwise AI score
+    const effectivePci = sql`CASE WHEN ${roadSegments.humanOverride} = true AND ${roadSegments.humanPciScore} IS NOT NULL THEN ${roadSegments.humanPciScore} ELSE ${roadSegments.pciScore} END`;
 
     // Survey count
     const [surveyStats] = await db
@@ -26,35 +50,35 @@ export async function GET() {
       .from(surveys)
       .where(eq(surveys.organizationId, orgId));
 
-    // Segment stats
+    // Segment stats (filtered by survey if selected)
     const [segmentStats] = await db
       .select({
         totalSegments: sql<number>`COUNT(*)`,
-        avgPci: sql<number>`COALESCE(ROUND(AVG(${roadSegments.pciScore})), 0)`,
+        avgPci: sql<number>`COALESCE(ROUND(AVG(${effectivePci})), 0)`,
         totalLengthFt: sql<number>`COALESCE(SUM(${roadSegments.lengthFt}), 0)`,
-        goodCount: sql<number>`SUM(CASE WHEN ${roadSegments.pciScore} >= 70 THEN 1 ELSE 0 END)`,
+        goodCount: sql<number>`SUM(CASE WHEN ${effectivePci} >= 70 THEN 1 ELSE 0 END)`,
         adaCount: sql<number>`SUM(CASE WHEN ${roadSegments.adaCurbRampFlag} = true THEN 1 ELSE 0 END)`,
       })
       .from(roadSegments)
-      .where(eq(roadSegments.organizationId, orgId));
+      .where(segmentCondition);
 
-    // PCI distribution buckets
+    // PCI distribution buckets (filtered, using effective PCI)
     const pciDistribution = await db
       .select({
         bucket: sql<string>`
           CASE
-            WHEN ${roadSegments.pciScore} >= 0 AND ${roadSegments.pciScore} < 10 THEN '0-10'
-            WHEN ${roadSegments.pciScore} >= 10 AND ${roadSegments.pciScore} < 25 THEN '10-25'
-            WHEN ${roadSegments.pciScore} >= 25 AND ${roadSegments.pciScore} < 40 THEN '25-40'
-            WHEN ${roadSegments.pciScore} >= 40 AND ${roadSegments.pciScore} < 55 THEN '40-55'
-            WHEN ${roadSegments.pciScore} >= 55 AND ${roadSegments.pciScore} < 70 THEN '55-70'
-            WHEN ${roadSegments.pciScore} >= 70 AND ${roadSegments.pciScore} < 85 THEN '70-85'
-            WHEN ${roadSegments.pciScore} >= 85 THEN '85-100'
+            WHEN ${effectivePci} >= 0 AND ${effectivePci} < 10 THEN '0-10'
+            WHEN ${effectivePci} >= 10 AND ${effectivePci} < 25 THEN '10-25'
+            WHEN ${effectivePci} >= 25 AND ${effectivePci} < 40 THEN '25-40'
+            WHEN ${effectivePci} >= 40 AND ${effectivePci} < 55 THEN '40-55'
+            WHEN ${effectivePci} >= 55 AND ${effectivePci} < 70 THEN '55-70'
+            WHEN ${effectivePci} >= 70 AND ${effectivePci} < 85 THEN '70-85'
+            WHEN ${effectivePci} >= 85 THEN '85-100'
           END`,
         count: sql<number>`COUNT(*)`,
       })
       .from(roadSegments)
-      .where(eq(roadSegments.organizationId, orgId))
+      .where(segmentCondition)
       .groupBy(sql`1`);
 
     const BUCKET_COLORS: Record<string, string> = {
@@ -76,13 +100,94 @@ export async function GET() {
       color: BUCKET_COLORS[range],
     }));
 
-    // Worst segments (top 10)
+    // Worst segments (top 10, filtered, sorted by effective PCI)
     const worstSegments = await db
       .select()
       .from(roadSegments)
-      .where(eq(roadSegments.organizationId, orgId))
-      .orderBy(roadSegments.pciScore)
+      .where(segmentCondition)
+      .orderBy(sql`${effectivePci} ASC`)
       .limit(10);
+
+    // Recent activity (last 15 events across surveys, overrides, flags)
+    const recentOverrides = await db
+      .select({
+        id: frames.id,
+        type: sql<string>`'override'`,
+        frameIndex: frames.frameIndex,
+        surveyId: frames.surveyId,
+        humanPciScore: frames.humanPciScore,
+        pciScore: frames.pciScore,
+        timestamp: frames.updatedAt,
+      })
+      .from(frames)
+      .innerJoin(surveys, eq(frames.surveyId, surveys.id))
+      .where(
+        and(
+          eq(surveys.organizationId, orgId),
+          eq(frames.humanOverride, true)
+        )
+      )
+      .orderBy(desc(frames.updatedAt))
+      .limit(10);
+
+    const recentFlags = await db
+      .select({
+        id: frames.id,
+        type: sql<string>`'flag'`,
+        frameIndex: frames.frameIndex,
+        surveyId: frames.surveyId,
+        humanPciScore: frames.humanPciScore,
+        pciScore: frames.pciScore,
+        timestamp: frames.updatedAt,
+      })
+      .from(frames)
+      .innerJoin(surveys, eq(frames.surveyId, surveys.id))
+      .where(
+        and(
+          eq(surveys.organizationId, orgId),
+          eq(frames.flaggedForReview, true)
+        )
+      )
+      .orderBy(desc(frames.updatedAt))
+      .limit(5);
+
+    const recentSurveyEvents = surveyList.slice(0, 5).map((s) => ({
+      id: s.id,
+      type: s.status === "completed" ? "survey_completed" : s.status === "processing" ? "survey_processing" : "survey_uploaded",
+      name: s.name,
+      status: s.status,
+      averagePci: s.averagePci,
+      timestamp: s.completedAt || null,
+    }));
+
+    // Merge and sort activity by timestamp
+    const activity = [
+      ...recentOverrides.map((r) => ({
+        id: r.id,
+        type: r.type as string,
+        description: `Frame #${r.frameIndex} override — PCI ${r.humanPciScore ?? r.pciScore}`,
+        timestamp: r.timestamp,
+      })),
+      ...recentFlags.map((r) => ({
+        id: r.id,
+        type: r.type as string,
+        description: `Frame #${r.frameIndex} flagged for review`,
+        timestamp: r.timestamp,
+      })),
+      ...recentSurveyEvents.map((s) => ({
+        id: s.id,
+        type: s.type,
+        description: s.type === "survey_completed"
+          ? `"${s.name}" completed — Avg PCI ${s.averagePci ?? "N/A"}`
+          : s.type === "survey_processing"
+            ? `"${s.name}" is processing`
+            : `"${s.name}" uploaded`,
+        timestamp: s.timestamp,
+      })),
+    ]
+      .filter((a) => a.timestamp)
+      .sort((a, b) => new Date(b.timestamp!).getTime() - new Date(a.timestamp!).getTime())
+      .slice(0, 15);
 
     const totalSegments = Number(segmentStats.totalSegments) || 0;
     const goodCount = Number(segmentStats.goodCount) || 0;
@@ -90,6 +195,7 @@ export async function GET() {
 
     return NextResponse.json({
       organization: org ? { name: org.name, plan: org.plan } : null,
+      surveys: surveyList,
       totalSurveys: Number(surveyStats.completedSurveys) || 0,
       totalSegments,
       averagePci: Number(segmentStats.avgPci) || 0,
@@ -98,6 +204,7 @@ export async function GET() {
       adaAlerts: Number(segmentStats.adaCount) || 0,
       pciDistribution: distribution,
       worstSegments,
+      recentActivity: activity,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to fetch dashboard";

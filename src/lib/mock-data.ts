@@ -123,6 +123,9 @@ export const mockSegments: RoadSegment[] = Array.from(
       pciScore: pci,
       district: randomFromArray(DISTRICTS),
       adaCurbRampFlag: rand() > 0.7,
+      humanOverride: false,
+      humanPciScore: null,
+      humanNotes: null,
       geometry: {
         type: "LineString" as const,
         coordinates: [

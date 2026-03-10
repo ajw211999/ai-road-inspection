@@ -63,6 +63,7 @@ export const analyzeFrames = inngest.createFunction(
             await db
               .update(frames)
               .set({
+                sceneType: analysis.sceneType as typeof frames.sceneType.enumValues[number],
                 distressType: analysis.distressType as typeof frames.distressType.enumValues[number],
                 severity: analysis.severity as typeof frames.severity.enumValues[number],
                 confidence: analysis.confidence,

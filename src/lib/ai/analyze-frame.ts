@@ -4,10 +4,13 @@ import path from "path";
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 
-const SYSTEM_PROMPT = `You are an expert road pavement inspector. Analyze this road surface image and provide a detailed assessment.
+const SYSTEM_PROMPT = `You are an expert road pavement inspector for a municipal road assessment program. Analyze this dashcam image and provide a detailed assessment.
+
+IMPORTANT: This system is for PUBLIC ROAD assessment only. You must classify what type of scene this is.
 
 Respond ONLY with valid JSON in this exact format:
 {
+  "sceneType": "<one of: public_road, parking_lot, driveway, intersection, bridge, off_road, not_road>",
   "distressType": "<one of: alligator_cracking, longitudinal_cracking, transverse_cracking, pothole, rutting, bleeding, raveling, patch_deterioration, depression, edge_cracking, none>",
   "severity": "<one of: low, medium, high>",
   "confidence": <number 0.0-1.0>,
@@ -17,16 +20,26 @@ Respond ONLY with valid JSON in this exact format:
   "notes": "<brief description of observed conditions>"
 }
 
-PCI scoring guide:
+Scene classification guide:
+- "public_road": Public street, highway, or municipal road — SCORE NORMALLY
+- "parking_lot": Commercial or private parking area — set confidence to 0.1
+- "driveway": Residential or commercial driveway — set confidence to 0.1
+- "intersection": Road intersection or turn — SCORE NORMALLY
+- "bridge": Bridge deck surface — SCORE NORMALLY
+- "off_road": Shoulder, median, grass — set distressType to "none", confidence to 0
+- "not_road": Sky, interior, blurry, obstructed, no pavement visible — set distressType to "none", pciScore to 0, confidence to 0
+
+Clues for parking lots: painted parking space lines, parking lot striping, cars parked at angles, shopping centers, drive-throughs, speed bumps, commercial building frontage.
+
+PCI scoring guide (for public roads only):
 - 100-86: Good — no visible distress
 - 85-71: Satisfactory — minor surface wear
 - 70-56: Fair — moderate cracking or patching
 - 55-41: Poor — significant distress, multiple types
-- 40-0: Failed — severe deterioration, safety hazard
-
-If the image does not show a road surface (e.g. sky, interior, blurry), set distressType to "none", pciScore to 0, confidence to 0, and note this in the notes field.`;
+- 40-0: Failed — severe deterioration, safety hazard`;
 
 export interface FrameAnalysis {
+  sceneType: string;
   distressType: string;
   severity: string;
   confidence: number;
@@ -175,9 +188,26 @@ const VALID_DISTRESS_TYPES = [
 
 const VALID_SEVERITIES = ["low", "medium", "high"];
 const VALID_SURFACE_TYPES = ["asphalt", "concrete", "gravel", "unpaved"];
+const VALID_SCENE_TYPES = [
+  "public_road",
+  "parking_lot",
+  "driveway",
+  "intersection",
+  "bridge",
+  "off_road",
+  "not_road",
+];
+
+// Scene types that should be included in road segment scoring
+export const SCORABLE_SCENE_TYPES = ["public_road", "intersection", "bridge"];
 
 function validateAnalysis(analysis: FrameAnalysis): FrameAnalysis {
+  const sceneType = VALID_SCENE_TYPES.includes(analysis.sceneType)
+    ? analysis.sceneType
+    : "public_road";
+
   return {
+    sceneType,
     distressType: VALID_DISTRESS_TYPES.includes(analysis.distressType)
       ? analysis.distressType
       : "none",

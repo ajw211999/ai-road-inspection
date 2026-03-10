@@ -7,6 +7,12 @@ import { promises as fs } from "fs";
 import path from "path";
 import ffmpeg from "fluent-ffmpeg";
 
+// Set FFmpeg path if FFMPEG_PATH env var is provided (useful on Windows/CI)
+if (process.env.FFMPEG_PATH) {
+  ffmpeg.setFfmpegPath(process.env.FFMPEG_PATH);
+  ffmpeg.setFfprobePath(process.env.FFPROBE_PATH || process.env.FFMPEG_PATH.replace("ffmpeg", "ffprobe"));
+}
+
 export const extractFrames = inngest.createFunction(
   {
     id: "extract-frames",

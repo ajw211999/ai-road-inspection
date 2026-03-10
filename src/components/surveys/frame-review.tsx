@@ -12,6 +12,9 @@ import {
   Filter,
   AlertTriangle,
   Loader2,
+  ZoomIn,
+  CheckSquare,
+  Square,
 } from "lucide-react";
 import Link from "next/link";
 import { PciBadge, SeverityBadge } from "@/components/ui/badge";
@@ -32,6 +35,10 @@ export function FrameReview({ surveyId }: FrameReviewProps) {
   const [total, setTotal] = useState(0);
   const [filter, setFilter] = useState<FilterType>("all");
   const [selectedFrame, setSelectedFrame] = useState<Frame | null>(null);
+  const [zoomedFrame, setZoomedFrame] = useState<Frame | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkSaving, setBulkSaving] = useState(false);
+  const [bulkPciScore, setBulkPciScore] = useState<string>("");
 
   const fetchFrames = useCallback(async () => {
     setLoading(true);
@@ -56,10 +63,16 @@ export function FrameReview({ surveyId }: FrameReviewProps) {
     fetchFrames();
   }, [fetchFrames]);
 
-  // Reset page when filter changes
+  // Reset page and selection when filter changes
   useEffect(() => {
     setPage(1);
+    setSelectedIds(new Set());
   }, [filter]);
+
+  // Clear selection on page change
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [page]);
 
   const handleFrameUpdated = (updated: Frame) => {
     setFrames((prev) =>
@@ -70,7 +83,71 @@ export function FrameReview({ surveyId }: FrameReviewProps) {
     }
   };
 
-  const filterOptions: { value: FilterType; label: string; count?: number }[] = [
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const selectAll = () => {
+    if (selectedIds.size === frames.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(frames.map((f) => f.id)));
+    }
+  };
+
+  const handleBulkApprove = async (pciScore?: number) => {
+    if (selectedIds.size === 0) return;
+    setBulkSaving(true);
+    try {
+      const res = await fetch("/api/frames/bulk", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          frameIds: Array.from(selectedIds),
+          action: "approve",
+          humanPciScore: pciScore,
+          humanNotes: "Bulk approved — looks fine",
+        }),
+      });
+      if (!res.ok) throw new Error("Bulk approve failed");
+      await fetchFrames();
+      setSelectedIds(new Set());
+      setBulkPciScore("");
+    } catch (err) {
+      console.error("Bulk approve error:", err);
+    } finally {
+      setBulkSaving(false);
+    }
+  };
+
+  const handleBulkFlag = async (flag: boolean) => {
+    if (selectedIds.size === 0) return;
+    setBulkSaving(true);
+    try {
+      const res = await fetch("/api/frames/bulk", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          frameIds: Array.from(selectedIds),
+          action: flag ? "flag" : "unflag",
+        }),
+      });
+      if (!res.ok) throw new Error("Bulk flag failed");
+      await fetchFrames();
+      setSelectedIds(new Set());
+    } catch (err) {
+      console.error("Bulk flag error:", err);
+    } finally {
+      setBulkSaving(false);
+    }
+  };
+
+  const filterOptions: { value: FilterType; label: string }[] = [
     { value: "all", label: "All Frames" },
     { value: "flagged", label: "Flagged" },
     { value: "overridden", label: "Overridden" },
@@ -113,6 +190,75 @@ export function FrameReview({ surveyId }: FrameReviewProps) {
         ))}
       </div>
 
+      {/* Bulk actions bar */}
+      {selectedIds.size > 0 && (
+        <div className="flex flex-wrap items-center gap-3 rounded-lg bg-blue-50 px-4 py-3">
+          <span className="text-sm font-medium text-blue-700">
+            {selectedIds.size} frame{selectedIds.size > 1 ? "s" : ""} selected
+          </span>
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            {/* PCI score input + apply override */}
+            <div className="flex items-center gap-1.5 rounded-lg bg-white px-2 py-1 shadow-sm ring-1 ring-gray-200">
+              <input
+                type="number"
+                min="0"
+                max="100"
+                value={bulkPciScore}
+                onChange={(e) => setBulkPciScore(e.target.value)}
+                placeholder="PCI"
+                className="w-16 border-none bg-transparent text-sm font-medium text-gray-800 outline-none placeholder:text-gray-400"
+              />
+              <button
+                onClick={() => {
+                  const score = parseInt(bulkPciScore);
+                  if (isNaN(score) || score < 0 || score > 100) return;
+                  handleBulkApprove(score);
+                }}
+                disabled={bulkSaving || !bulkPciScore || isNaN(parseInt(bulkPciScore))}
+                className="flex items-center gap-1 rounded bg-blue-600 px-2 py-1 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                {bulkSaving ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <Check className="h-3 w-3" />
+                )}
+                Apply Override
+              </button>
+            </div>
+            <span className="text-xs text-gray-400">or</span>
+            <button
+              onClick={() => handleBulkApprove()}
+              disabled={bulkSaving}
+              className="flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50"
+            >
+              {bulkSaving ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Check className="h-3.5 w-3.5" />
+              )}
+              Approve (Keep AI Score)
+            </button>
+            <button
+              onClick={() => handleBulkFlag(true)}
+              disabled={bulkSaving}
+              className="flex items-center gap-1.5 rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-600 disabled:opacity-50"
+            >
+              <Flag className="h-3.5 w-3.5" />
+              Flag Selected
+            </button>
+            <button
+              onClick={() => {
+                setSelectedIds(new Set());
+                setBulkPciScore("");
+              }}
+              className="rounded-lg px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-200"
+            >
+              Clear
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Content */}
       {loading ? (
         <div className="flex items-center justify-center py-20">
@@ -125,6 +271,21 @@ export function FrameReview({ surveyId }: FrameReviewProps) {
         </div>
       ) : (
         <>
+          {/* Select all toggle */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={selectAll}
+              className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700"
+            >
+              {selectedIds.size === frames.length ? (
+                <CheckSquare className="h-4 w-4 text-blue-600" />
+              ) : (
+                <Square className="h-4 w-4" />
+              )}
+              {selectedIds.size === frames.length ? "Deselect all" : "Select all on page"}
+            </button>
+          </div>
+
           {/* Frame grid + detail panel */}
           <div className="flex gap-6">
             {/* Grid */}
@@ -135,7 +296,10 @@ export function FrameReview({ surveyId }: FrameReviewProps) {
                     key={frame.id}
                     frame={frame}
                     isSelected={selectedFrame?.id === frame.id}
+                    isChecked={selectedIds.has(frame.id)}
+                    onCheck={() => toggleSelect(frame.id)}
                     onClick={() => setSelectedFrame(frame)}
+                    onZoom={() => setZoomedFrame(frame)}
                   />
                 ))}
               </div>
@@ -147,6 +311,7 @@ export function FrameReview({ surveyId }: FrameReviewProps) {
                 frame={selectedFrame}
                 onClose={() => setSelectedFrame(null)}
                 onUpdated={handleFrameUpdated}
+                onZoom={() => setZoomedFrame(selectedFrame)}
               />
             )}
           </div>
@@ -175,95 +340,271 @@ export function FrameReview({ surveyId }: FrameReviewProps) {
           )}
         </>
       )}
+
+      {/* Zoom lightbox */}
+      {zoomedFrame && (
+        <ImageZoomLightbox
+          frame={zoomedFrame}
+          onClose={() => setZoomedFrame(null)}
+        />
+      )}
     </div>
   );
 }
 
 // ============================================================
-// Frame Card (grid item)
+// Frame Card (grid item) — now with checkbox + zoom button
 // ============================================================
 
 function FrameCard({
   frame,
   isSelected,
+  isChecked,
+  onCheck,
   onClick,
+  onZoom,
 }: {
   frame: Frame;
   isSelected: boolean;
+  isChecked: boolean;
+  onCheck: () => void;
   onClick: () => void;
+  onZoom: () => void;
 }) {
   return (
-    <button
-      onClick={onClick}
+    <div
       className={`group relative overflow-hidden rounded-lg border text-left transition-all ${
         isSelected
           ? "border-blue-500 ring-2 ring-blue-200"
-          : "border-gray-200 hover:border-gray-300 hover:shadow-md"
+          : isChecked
+            ? "border-blue-400 ring-1 ring-blue-100"
+            : "border-gray-200 hover:border-gray-300 hover:shadow-md"
       }`}
     >
-      {/* Frame image */}
-      <div className="aspect-video w-full bg-gray-100">
-        <img
-          src={frame.imageUrl}
-          alt={`Frame ${frame.frameIndex}`}
-          className="h-full w-full object-cover"
-          loading="lazy"
-        />
-      </div>
-
-      {/* Overlay badges */}
-      <div className="absolute left-2 top-2 flex gap-1">
-        {frame.flaggedForReview && (
-          <span className="rounded bg-amber-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
-            FLAGGED
-          </span>
+      {/* Checkbox */}
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          onCheck();
+        }}
+        className="absolute left-2 top-2 z-10 rounded bg-white/80 p-0.5 backdrop-blur-sm hover:bg-white"
+      >
+        {isChecked ? (
+          <CheckSquare className="h-5 w-5 text-blue-600" />
+        ) : (
+          <Square className="h-5 w-5 text-gray-400 opacity-0 transition-opacity group-hover:opacity-100" />
         )}
-        {frame.humanOverride && (
-          <span className="rounded bg-blue-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
-            OVERRIDE
-          </span>
-        )}
-      </div>
+      </button>
 
-      {/* Info bar */}
-      <div className="space-y-1.5 p-3">
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-medium text-gray-700">
-            #{frame.frameIndex}
-          </span>
-          <PciBadge score={frame.humanOverride ? (frame.humanPciScore ?? frame.pciScore) : frame.pciScore} />
+      {/* Zoom button */}
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          onZoom();
+        }}
+        className="absolute right-2 top-2 z-10 rounded bg-white/80 p-1 text-gray-500 opacity-0 backdrop-blur-sm transition-opacity hover:bg-white hover:text-gray-700 group-hover:opacity-100"
+      >
+        <ZoomIn className="h-4 w-4" />
+      </button>
+
+      {/* Clickable area for detail panel */}
+      <button onClick={onClick} className="w-full text-left">
+        {/* Frame image */}
+        <div className="aspect-video w-full bg-gray-100">
+          <img
+            src={frame.imageUrl}
+            alt={`Frame ${frame.frameIndex}`}
+            className="h-full w-full object-cover"
+            loading="lazy"
+          />
         </div>
-        <div className="flex items-center justify-between">
-          <span className="text-xs text-gray-500">
-            {distressLabel(frame.distressType)}
-          </span>
-          <SeverityBadge severity={frame.severity} />
+
+        {/* Overlay badges */}
+        <div className="absolute right-2 bottom-[calc(50%+0.5rem)] flex gap-1">
+          {frame.flaggedForReview && (
+            <span className="rounded bg-amber-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
+              FLAGGED
+            </span>
+          )}
+          {frame.humanOverride && (
+            <span className="rounded bg-blue-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
+              OVERRIDE
+            </span>
+          )}
         </div>
-        {frame.confidence > 0 && (
-          <div className="flex items-center gap-1 text-xs text-gray-400">
-            <span>Confidence: {(frame.confidence * 100).toFixed(0)}%</span>
-            {frame.confidence < 0.7 && (
-              <AlertTriangle className="h-3 w-3 text-amber-400" />
-            )}
+
+        {/* Info bar */}
+        <div className="space-y-1.5 p-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-gray-700">
+              #{frame.frameIndex}
+            </span>
+            <PciBadge score={frame.humanOverride ? (frame.humanPciScore ?? frame.pciScore) : frame.pciScore} />
           </div>
-        )}
-      </div>
-    </button>
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-gray-500">
+              {distressLabel(frame.distressType)}
+            </span>
+            <SeverityBadge severity={frame.severity} />
+          </div>
+          {frame.confidence > 0 && (
+            <div className="flex items-center gap-1 text-xs text-gray-400">
+              <span>Confidence: {(frame.confidence * 100).toFixed(0)}%</span>
+              {frame.confidence < 0.7 && (
+                <AlertTriangle className="h-3 w-3 text-amber-400" />
+              )}
+            </div>
+          )}
+        </div>
+      </button>
+    </div>
   );
 }
 
 // ============================================================
-// Frame Detail Panel (side panel)
+// Image Zoom Lightbox
+// ============================================================
+
+function ImageZoomLightbox({
+  frame,
+  onClose,
+}: {
+  frame: Frame;
+  onClose: () => void;
+}) {
+  const [scale, setScale] = useState(1);
+  const [position, setPosition] = useState({ x: 0, y: 0 });
+  const [dragging, setDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+
+  // Close on Escape
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [onClose]);
+
+  const handleWheel = (e: React.WheelEvent) => {
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? -0.2 : 0.2;
+    setScale((s) => Math.max(0.5, Math.min(5, s + delta)));
+  };
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (scale <= 1) return;
+    setDragging(true);
+    setDragStart({ x: e.clientX - position.x, y: e.clientY - position.y });
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!dragging) return;
+    setPosition({
+      x: e.clientX - dragStart.x,
+      y: e.clientY - dragStart.y,
+    });
+  };
+
+  const handleMouseUp = () => setDragging(false);
+
+  const resetZoom = () => {
+    setScale(1);
+    setPosition({ x: 0, y: 0 });
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      {/* Controls */}
+      <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
+        <span className="rounded bg-black/50 px-2 py-1 text-xs text-white">
+          Frame #{frame.frameIndex} &middot; {Math.round(scale * 100)}%
+        </span>
+        <button
+          onClick={() => setScale((s) => Math.min(5, s + 0.5))}
+          className="rounded bg-white/10 p-2 text-white hover:bg-white/20"
+        >
+          +
+        </button>
+        <button
+          onClick={() => setScale((s) => Math.max(0.5, s - 0.5))}
+          className="rounded bg-white/10 p-2 text-white hover:bg-white/20"
+        >
+          -
+        </button>
+        <button
+          onClick={resetZoom}
+          className="rounded bg-white/10 px-2 py-2 text-xs text-white hover:bg-white/20"
+        >
+          Reset
+        </button>
+        <button
+          onClick={onClose}
+          className="rounded bg-white/10 p-2 text-white hover:bg-white/20"
+        >
+          <X className="h-5 w-5" />
+        </button>
+      </div>
+
+      {/* Info overlay */}
+      <div className="absolute bottom-4 left-4 z-10 flex items-center gap-3 rounded-lg bg-black/50 px-3 py-2 text-sm text-white">
+        <PciBadge score={frame.pciScore} />
+        <span>{distressLabel(frame.distressType)}</span>
+        <span>Confidence: {(frame.confidence * 100).toFixed(0)}%</span>
+      </div>
+
+      {/* Image */}
+      <div
+        className="overflow-hidden"
+        style={{ cursor: scale > 1 ? (dragging ? "grabbing" : "grab") : "zoom-in" }}
+        onWheel={handleWheel}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
+        onClick={() => {
+          if (scale === 1) setScale(2);
+        }}
+      >
+        <img
+          src={frame.imageUrl}
+          alt={`Frame ${frame.frameIndex}`}
+          className="max-h-[85vh] max-w-[90vw] select-none"
+          style={{
+            transform: `translate(${position.x}px, ${position.y}px) scale(${scale})`,
+            transition: dragging ? "none" : "transform 0.2s ease",
+          }}
+          draggable={false}
+        />
+      </div>
+
+      {/* Keyboard hint */}
+      <div className="absolute bottom-4 right-4 text-xs text-white/50">
+        Scroll to zoom &middot; Drag to pan &middot; Click to zoom in &middot; Esc to close
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// Frame Detail Panel (side panel) — now with zoom button
 // ============================================================
 
 function FrameDetailPanel({
   frame,
   onClose,
   onUpdated,
+  onZoom,
 }: {
   frame: Frame;
   onClose: () => void;
   onUpdated: (frame: Frame) => void;
+  onZoom: () => void;
 }) {
   const [pciScore, setPciScore] = useState<string>(
     frame.humanPciScore?.toString() ?? ""
@@ -337,6 +678,15 @@ function FrameDetailPanel({
     }
   };
 
+  // Close on Escape
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [onClose]);
+
   return (
     <div className="w-96 shrink-0 overflow-y-auto rounded-xl border border-gray-200 bg-white shadow-lg">
       {/* Header */}
@@ -344,21 +694,36 @@ function FrameDetailPanel({
         <h3 className="text-sm font-semibold text-gray-900">
           Frame #{frame.frameIndex}
         </h3>
-        <button
-          onClick={onClose}
-          className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
-        >
-          <X className="h-4 w-4" />
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={onZoom}
+            className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+            title="Zoom image"
+          >
+            <ZoomIn className="h-4 w-4" />
+          </button>
+          <button
+            onClick={onClose}
+            className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
       </div>
 
-      {/* Image */}
-      <div className="border-b border-gray-100">
+      {/* Image — click to zoom */}
+      <div
+        className="cursor-zoom-in border-b border-gray-100"
+        onClick={onZoom}
+      >
         <img
           src={frame.imageUrl}
           alt={`Frame ${frame.frameIndex}`}
           className="w-full object-contain"
         />
+        <div className="flex items-center justify-center gap-1 py-1 text-[10px] text-gray-400">
+          <ZoomIn className="h-3 w-3" /> Click to zoom
+        </div>
       </div>
 
       <div className="space-y-4 p-4">
@@ -446,7 +811,7 @@ function FrameDetailPanel({
           <div className="mt-2 space-y-3">
             <div>
               <label className="block text-xs text-gray-500">
-                PCI Score (0–100)
+                PCI Score (0-100)
               </label>
               <input
                 type="number"

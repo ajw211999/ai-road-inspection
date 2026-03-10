@@ -95,6 +95,9 @@ export interface RoadSegment {
   pciScore: number; // 0-100
   district: string | null; // equity analysis
   adaCurbRampFlag: boolean; // ADA compliance flagging
+  humanOverride: boolean; // field inspector override
+  humanPciScore: number | null;
+  humanNotes: string | null;
   geometry: GeoJSON.LineString | null; // PostGIS linestring
   createdAt: Date;
   updatedAt: Date;

@@ -38,6 +38,16 @@ export const surveyStatusEnum = pgEnum("survey_status", [
   "failed",
 ]);
 
+export const sceneTypeEnum = pgEnum("scene_type", [
+  "public_road",
+  "parking_lot",
+  "driveway",
+  "intersection",
+  "bridge",
+  "off_road",
+  "not_road",
+]);
+
 export const distressTypeEnum = pgEnum("distress_type", [
   "alligator_cracking",
   "longitudinal_cracking",
@@ -165,6 +175,10 @@ export const roadSegments = pgTable(
     pciScore: integer("pci_score").notNull(),
     district: varchar("district", { length: 100 }), // equity analysis
     adaCurbRampFlag: boolean("ada_curb_ramp_flag").default(false).notNull(),
+    // Human override fields (like frames — for field inspectors)
+    humanOverride: boolean("human_override").default(false).notNull(),
+    humanPciScore: integer("human_pci_score"),
+    humanNotes: text("human_notes"),
     // PostGIS geometry stored as GeoJSON in jsonb for portability
     // Upgrade to native geometry column when PostGIS extension is enabled
     geometry: jsonb("geometry"),
@@ -194,6 +208,7 @@ export const frames = pgTable(
     lat: real("lat").notNull(),
     lng: real("lng").notNull(),
     heading: real("heading"),
+    sceneType: sceneTypeEnum("scene_type").default("public_road").notNull(),
     distressType: distressTypeEnum("distress_type").default("none").notNull(),
     severity: severityEnum("severity").default("low").notNull(),
     confidence: real("confidence").default(0).notNull(),
