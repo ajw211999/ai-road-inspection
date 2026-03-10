@@ -8,6 +8,48 @@ export const AUSTIN_VIEW_STATE = {
   zoom: 13,
 };
 
+/** Compute view state that fits all segments, fallback to Austin */
+export function computeViewState(segments: RoadSegment[]): {
+  latitude: number;
+  longitude: number;
+  zoom: number;
+} {
+  if (segments.length === 0) return AUSTIN_VIEW_STATE;
+
+  let minLat = Infinity,
+    maxLat = -Infinity,
+    minLng = Infinity,
+    maxLng = -Infinity;
+
+  for (const s of segments) {
+    minLat = Math.min(minLat, s.startLat, s.endLat);
+    maxLat = Math.max(maxLat, s.startLat, s.endLat);
+    minLng = Math.min(minLng, s.startLng, s.endLng);
+    maxLng = Math.max(maxLng, s.startLng, s.endLng);
+  }
+
+  // Skip if all coords are 0 (no GPS data yet)
+  if (minLat === 0 && maxLat === 0 && minLng === 0 && maxLng === 0) {
+    return AUSTIN_VIEW_STATE;
+  }
+
+  const latitude = (minLat + maxLat) / 2;
+  const longitude = (minLng + maxLng) / 2;
+
+  // Estimate zoom from bounding box span
+  const latSpan = maxLat - minLat;
+  const lngSpan = maxLng - minLng;
+  const span = Math.max(latSpan, lngSpan);
+
+  let zoom = 13;
+  if (span > 0.5) zoom = 10;
+  else if (span > 0.1) zoom = 12;
+  else if (span > 0.01) zoom = 14;
+  else zoom = 16;
+
+  return { latitude, longitude, zoom };
+}
+
 /** Convert road segments array to a GeoJSON FeatureCollection */
 export function segmentsToFeatureCollection(segments: RoadSegment[]): {
   type: "FeatureCollection";

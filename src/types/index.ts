@@ -35,7 +35,7 @@ export interface Organization {
   name: string;
   slug: string;
   logoUrl: string | null;
-  plan: "starter" | "professional" | "enterprise";
+  plan: "starter" | "standard" | "professional" | "enterprise";
   stripeCustomerId: string | null;
   stripeSubscriptionId: string | null;
   createdAt: Date;

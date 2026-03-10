@@ -4,7 +4,6 @@ import {
   BarChart3,
   MapPin,
   Activity,
-  AlertTriangle,
   Accessibility,
 } from "lucide-react";
 

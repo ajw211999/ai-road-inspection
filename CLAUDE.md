@@ -1,7 +1,7 @@
-# AI Road Inspection SaaS — Project Context
+# GroundTruth AI — Project Context
 
 ## What This Is
-AI-powered road inspection SaaS platform for Texas municipalities. Converts dashcam video into PCI (Pavement Condition Index) scores, distress maps, and actionable reports.
+GroundTruth AI — AI-powered road inspection SaaS platform for Texas municipalities. Converts dashcam video into PCI (Pavement Condition Index) scores, distress maps, and actionable reports.
 
 ## Tech Stack
 - **Framework**: Next.js 14+ with App Router, TypeScript, Tailwind CSS

@@ -29,7 +29,7 @@ export function Sidebar() {
       {/* Logo */}
       <div className="flex h-16 items-center gap-2 border-b border-gray-200 px-6">
         <Construction className="h-7 w-7 text-blue-600" />
-        <span className="text-lg font-bold text-gray-900">RoadInspect AI</span>
+        <span className="text-lg font-bold text-gray-900">GroundTruth AI</span>
       </div>
 
       {/* Navigation */}

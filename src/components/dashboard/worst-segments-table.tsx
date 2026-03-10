@@ -53,7 +53,7 @@ export function WorstSegmentsTable({ segments }: WorstSegmentsTableProps) {
             {worst.map((seg) => (
               <tr
                 key={seg.id}
-                onClick={() => router.push(`/map?segment=${seg.id}`)}
+                onClick={() => router.push(`/map?segment=${seg.id}&survey=${seg.surveyId}`)}
                 className="cursor-pointer transition-colors hover:bg-blue-50"
               >
                 <td className="whitespace-nowrap px-6 py-3.5 text-sm font-medium text-gray-900">

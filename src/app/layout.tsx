@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "RoadInspect AI — Municipal Road Condition Assessment",
+  title: "GroundTruth AI — Municipal Road Condition Assessment",
   description:
     "AI-powered road inspection SaaS for Texas municipalities. Dashcam to PCI scores in minutes.",
 };

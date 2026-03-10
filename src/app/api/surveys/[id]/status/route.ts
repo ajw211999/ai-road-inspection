@@ -22,6 +22,8 @@ export async function GET(
         status: true,
         totalFrames: true,
         processedFrames: true,
+        totalSegments: true,
+        averagePci: true,
       },
     });
 

@@ -100,17 +100,10 @@ export const extractFrames = inngest.createFunction(
       }
     });
 
-    // Step 5: Mark survey as completed
-    await step.run("mark-complete", async () => {
-      await db
-        .update(surveys)
-        .set({
-          status: "completed",
-          processedFrames: totalFrames,
-          completedAt: new Date(),
-          updatedAt: new Date(),
-        })
-        .where(eq(surveys.id, surveyId));
+    // Step 5: Trigger AI analysis pipeline
+    await step.sendEvent("trigger-analyze-frames", {
+      name: "survey/analyze-frames",
+      data: { surveyId },
     });
 
     return { surveyId, totalFrames };

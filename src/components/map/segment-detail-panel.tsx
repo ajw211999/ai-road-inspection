@@ -2,7 +2,6 @@
 
 import type { RoadSegment, Frame } from "@/types";
 import { pciColor, pciLabel, formatMiles } from "@/lib/utils";
-import { PciBadge } from "@/components/ui/badge";
 import { FrameList } from "./frame-list";
 import { ArrowLeft, Accessibility, Ruler, MapPin } from "lucide-react";
 

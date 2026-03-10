@@ -50,14 +50,15 @@ export async function POST(
     for (const chunkFile of chunkFiles) {
       const chunkPath = path.join(uploadDir, chunkFile);
       const chunkData = await fs.readFile(chunkPath);
-      writeStream.write(chunkData);
+      const canContinue = writeStream.write(chunkData);
+      if (!canContinue) {
+        await new Promise<void>((resolve) => writeStream.once("drain", resolve));
+      }
     }
 
     await new Promise<void>((resolve, reject) => {
-      writeStream.end((err: Error | null) => {
-        if (err) reject(err);
-        else resolve();
-      });
+      writeStream.on("error", reject);
+      writeStream.end(() => resolve());
     });
 
     // Clean up chunk files

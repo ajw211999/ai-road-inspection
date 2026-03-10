@@ -27,8 +27,14 @@ export function UploadDialog({ open, onClose, onComplete }: UploadDialogProps) {
   const [progress, setProgress] = useState(0);
   const [bytesUploaded, setBytesUploaded] = useState(0);
   const [error, setError] = useState<string | null>(null);
-  const [surveyId, setSurveyId] = useState<string | null>(null);
+  const [, setSurveyId] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
+  const [processingStatus, setProcessingStatus] = useState<{
+    totalFrames: number;
+    processedFrames: number;
+    totalSegments: number;
+    averagePci: number | null;
+  } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -47,6 +53,7 @@ export function UploadDialog({ open, onClose, onComplete }: UploadDialogProps) {
     setBytesUploaded(0);
     setError(null);
     setSurveyId(null);
+    setProcessingStatus(null);
     if (pollRef.current) clearInterval(pollRef.current);
   }, []);
 
@@ -99,6 +106,12 @@ export function UploadDialog({ open, onClose, onComplete }: UploadDialogProps) {
         const res = await fetch(`/api/surveys/${sid}/status`);
         if (!res.ok) return;
         const data = await res.json();
+        setProcessingStatus({
+          totalFrames: data.totalFrames,
+          processedFrames: data.processedFrames,
+          totalSegments: data.totalSegments,
+          averagePci: data.averagePci,
+        });
 
         if (data.status === "completed") {
           setStage("complete");
@@ -106,7 +119,7 @@ export function UploadDialog({ open, onClose, onComplete }: UploadDialogProps) {
           onComplete();
         } else if (data.status === "failed") {
           setStage("error");
-          setError("Frame extraction failed. Please try again.");
+          setError("Processing failed. Please try again.");
           if (pollRef.current) clearInterval(pollRef.current);
         }
       } catch {
@@ -302,12 +315,40 @@ export function UploadDialog({ open, onClose, onComplete }: UploadDialogProps) {
             <div className="flex flex-col items-center gap-3 py-4">
               <Loader2 className="h-10 w-10 animate-spin text-amber-500" />
               <p className="text-sm font-medium text-gray-900">
-                Extracting frames...
+                Processing survey...
               </p>
               <p className="text-xs text-gray-500">
-                FFmpeg is processing your video at 1 frame per second.
-                This may take a moment.
+                Extracting frames, running AI analysis, and generating road segments.
+                This may take several minutes.
               </p>
+              {processingStatus && (
+                <div className="mt-2 w-full space-y-1">
+                  <div className="flex justify-between text-xs text-gray-500">
+                    <span>
+                      {processingStatus.processedFrames} / {processingStatus.totalFrames} frames analyzed
+                    </span>
+                    <span>
+                      {processingStatus.totalFrames > 0
+                        ? Math.round(
+                            (processingStatus.processedFrames / processingStatus.totalFrames) * 100
+                          )
+                        : 0}%
+                    </span>
+                  </div>
+                  <div className="h-2 w-full overflow-hidden rounded-full bg-gray-200">
+                    <div
+                      className="h-full rounded-full bg-amber-500 transition-all duration-500"
+                      style={{
+                        width: `${
+                          processingStatus.totalFrames > 0
+                            ? (processingStatus.processedFrames / processingStatus.totalFrames) * 100
+                            : 0
+                        }%`,
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -316,10 +357,12 @@ export function UploadDialog({ open, onClose, onComplete }: UploadDialogProps) {
             <div className="flex flex-col items-center gap-3 py-4">
               <CheckCircle className="h-10 w-10 text-green-500" />
               <p className="text-sm font-medium text-gray-900">
-                Upload complete!
+                Survey complete!
               </p>
               <p className="text-xs text-gray-500">
-                Frames have been extracted and are ready for analysis.
+                {processingStatus?.totalSegments
+                  ? `${processingStatus.totalSegments} road segments generated with avg PCI ${processingStatus.averagePci ?? "N/A"}.`
+                  : "Frames have been analyzed and road segments generated."}
               </p>
             </div>
           )}

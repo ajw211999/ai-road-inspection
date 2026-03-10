@@ -1,4 +1,5 @@
-import { Film, Clock, CheckCircle, AlertCircle, Upload } from "lucide-react";
+import Link from "next/link";
+import { Film, Clock, CheckCircle, AlertCircle, Upload, Eye } from "lucide-react";
 import type { Survey } from "@/types";
 
 const STATUS_CONFIG: Record<
@@ -87,14 +88,23 @@ export function SurveyCard({ survey }: SurveyCardProps) {
 
       {/* Stats for completed surveys */}
       {survey.status === "completed" && (
-        <div className="mt-4 grid grid-cols-3 gap-3">
-          <MiniStat label="Frames" value={survey.processedFrames} />
-          <MiniStat label="Segments" value={survey.totalSegments} />
-          <MiniStat
-            label="Avg PCI"
-            value={survey.averagePci != null ? Math.round(survey.averagePci) : "—"}
-          />
-        </div>
+        <>
+          <div className="mt-4 grid grid-cols-3 gap-3">
+            <MiniStat label="Frames" value={survey.processedFrames} />
+            <MiniStat label="Segments" value={survey.totalSegments} />
+            <MiniStat
+              label="Avg PCI"
+              value={survey.averagePci != null ? Math.round(survey.averagePci) : "—"}
+            />
+          </div>
+          <Link
+            href={`/surveys/${survey.id}/review`}
+            className="mt-3 flex items-center justify-center gap-2 rounded-lg bg-blue-50 px-3 py-2 text-sm font-medium text-blue-700 transition-colors hover:bg-blue-100"
+          >
+            <Eye className="h-4 w-4" />
+            Review Frames
+          </Link>
+        </>
       )}
 
       {/* Error state info */}

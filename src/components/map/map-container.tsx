@@ -4,7 +4,7 @@ import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import Map, { Source, Layer, type MapRef, type MapMouseEvent } from "react-map-gl/mapbox";
 import type { RoadSegment, Frame } from "@/types";
 import {
-  AUSTIN_VIEW_STATE,
+  computeViewState,
   segmentsToFeatureCollection,
   pciColorExpression,
   buildPciFilter,
@@ -43,6 +43,11 @@ export function MapContainer({
     () => new Set(PCI_CATEGORIES.map((c) => c.key))
   );
 
+  const initialView = useMemo(
+    () => computeViewState(segments),
+    [segments]
+  );
+
   const geojson = useMemo(
     () => segmentsToFeatureCollection(segments),
     [segments]
@@ -79,7 +84,6 @@ export function MapContainer({
       setSelectedSegment(segment);
       flyToSegment(segment);
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     []
   );
 
@@ -159,7 +163,7 @@ export function MapContainer({
       <div className="relative flex-1">
         <Map
           ref={mapRef}
-          initialViewState={AUSTIN_VIEW_STATE}
+          initialViewState={initialView}
           mapboxAccessToken={mapboxToken}
           mapStyle="mapbox://styles/mapbox/light-v11"
           interactiveLayerIds={["road-segments"]}

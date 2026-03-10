@@ -19,6 +19,7 @@ import { relations } from "drizzle-orm";
 
 export const planEnum = pgEnum("plan", [
   "starter",
+  "standard",
   "professional",
   "enterprise",
 ]);
